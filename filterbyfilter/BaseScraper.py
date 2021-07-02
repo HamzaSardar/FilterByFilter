@@ -1,12 +1,10 @@
-import abc
+from typing import NoReturn
 
 
-class BaseScraper(abc.ABC):
+class BaseScraper:
 
-    @abc.abstractmethod
-    def pull(self):
+    def pull(self) -> NoReturn:
         raise NotImplementedError('BaseScraper::pull()')
 
-    @abc.abstractmethod
-    def scrape(self):
+    def scrape(self) -> NoReturn:
         raise NotImplementedError('BaseScraper::scrape()')
