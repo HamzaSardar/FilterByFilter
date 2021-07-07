@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 import requests
 from bs4 import BeautifulSoup
@@ -9,10 +9,11 @@ from ..coffee import Coffee
 
 class SquareMileScraper(BaseScraper):
 
-    def __init__(self):
+    DEFAULT_WEIGHT: int = -1
+
+    def __init__(self) -> None:
         self.URL = "https://shop.squaremilecoffee.com/"
 
-    @property
     def scrape(self) -> List[Coffee]:
 
         shop_homepage = requests.get(self.URL)
@@ -23,20 +24,20 @@ class SquareMileScraper(BaseScraper):
             coffee_page = requests.get(url)
             coffee_soup = BeautifulSoup(coffee_page.text, 'lxml')
 
-            # extract name
+            # Extract name
             name_soup = coffee_soup.find_all('meta', attrs={'property': 'og:title'})
             coffee_name = name_soup[0]['content']
 
-            # extract description
+            # Extract description
             description_soup = coffee_soup.find_all('meta', attrs={'property': 'og:description'})
             coffee_description = description_soup[0]['content']
 
-            # extract origin, process, altitude if there
-            info_soup = coffee_soup.find_all('div', attrs={'class': 'sqmile-wysiwyg'})
+            # Extract origin, process, altitude
             origin = []
             process = []
             coffee_altitude = None
-            for div in info_soup:
+            origin_process_alt_soup = coffee_soup.find_all('div', attrs={'class': 'sqmile-wysiwyg'})
+            for div in origin_process_alt_soup:
                 for p in div.find_all('p'):
                     if 'Country' in p.text:
                         origin.append(p.text)
@@ -46,36 +47,36 @@ class SquareMileScraper(BaseScraper):
                         if i.text == 'Process':
                             process.append(p.text)
 
-            # extract price for smallest pack size. Default is 350g
-            # but specials like 'Jam' may be less - check description.
-            coffee_price = []
+            # Extract prices
+            coffee_price = {}
             product_soup = coffee_soup.find_all('form', attrs={'action': '/cart/add'})
             if option_soup := product_soup[0].find_all('div', attrs={'id': 'product-variants'}):
                 for price in option_soup[0].find_all('option'):
-                    coffee_price.append(price.text)
+                    # return price dict
+                    coffee_price.update(self._get_price_dict(price.text))
             else:
                 price_soup = product_soup[0].find_all('span', attrs={'itemprop': 'price'})
-                coffee_price.append(price_soup[0].text)
+                # return price dict
+                coffee_price.update(self._get_price_dict(price_soup[0].text))
 
-            # if len(price_soup) == 1:
-            #     print('price found')
-            #     for item in price_soup:
-            #         coffee_price = item.text
-            # else:
-            #     coffee_price = None
-
-            # for item in price_soup:
-            #     coffee_price = item.text
-
-            # extract tasting notes
+            # Extract tasting notes
             tasting_notes: List[str] = []
             if coffee_soup.find('div', attrs={'class': 'sqm-product-tasting-notes-pp'}):
                 tns_soup = coffee_soup.find('div', attrs={'class': 'sqm-product-tasting-notes-pp'})
                 for note in tns_soup:
                     tasting_notes.extend(note)
 
-            current_coffee = Coffee(coffee_name, coffee_description, origin,
-                                    coffee_altitude, coffee_price, process, tasting_notes, url)
+            current_coffee = Coffee(
+                name=coffee_name,
+                description=coffee_description,
+                origin=origin,
+                altitude=coffee_altitude,
+                price=coffee_price,
+                process=process,
+                tasting_notes=tasting_notes,
+                url=url
+            )
+
             coffees.append(current_coffee)
 
         return coffees
@@ -89,7 +90,7 @@ class SquareMileScraper(BaseScraper):
         ----------
         shop_homepage: requests.Response
             Webpage containing a brief description of, and links to, all
-            available coffees.
+            available filter coffees.
 
         Returns
         -------
@@ -111,3 +112,21 @@ class SquareMileScraper(BaseScraper):
             coffee_links.append(product_url)
 
         return coffee_links
+
+    def _get_price_dict(self, price_str: str) -> Dict[int, float]:
+        price_str_list = price_str.split(' - ')
+
+        if len(price_str_list) == 1:
+            return {self.DEFAULT_WEIGHT: float(price_str_list[0].strip('£'))}
+
+        if price_str_list[0].endswith('kg'):
+            weight = int(float(price_str_list[0].strip('kg')) * 1000)
+        elif price_str_list[0].endswith('g'):
+            weight = int(price_str_list[0].strip('g'))
+        else:
+            print(price_str_list)
+            raise ValueError('Weight in incorrect format.')
+
+        price = float(price_str_list[1].strip('£'))
+
+        return {weight: price}
