@@ -6,20 +6,24 @@ from bs4 import BeautifulSoup
 from filterbyfilter.scrapers.base_scraper import BaseScraper
 from ..coffee import Coffee
 
+import json
+
 
 class SquareMileScraper(BaseScraper):
-
     DEFAULT_WEIGHT: int = -1
 
     def __init__(self) -> None:
         self.URL = "https://shop.squaremilecoffee.com/"
 
+    @property
     def scrape(self) -> List[Coffee]:
 
         shop_homepage = requests.get(self.URL)
         coffee_urls = self._find_coffee_urls(shop_homepage)
 
         coffees: List[Coffee] = []
+        coffees_dict: Dict = {}
+
         for url in coffee_urls:
             coffee_page = requests.get(url)
             coffee_soup = BeautifulSoup(coffee_page.text, 'lxml')
@@ -64,7 +68,10 @@ class SquareMileScraper(BaseScraper):
             if coffee_soup.find('div', attrs={'class': 'sqm-product-tasting-notes-pp'}):
                 tns_soup = coffee_soup.find('div', attrs={'class': 'sqm-product-tasting-notes-pp'})
                 for note in tns_soup:
-                    tasting_notes.extend(note)
+                    tasting_notes.append(str(note.string))
+                for elem in tasting_notes:
+                    if '/' in elem:
+                        tasting_notes.pop(tasting_notes.index(elem))
 
             current_coffee = Coffee(
                 name=coffee_name,
@@ -77,9 +84,42 @@ class SquareMileScraper(BaseScraper):
                 url=url
             )
 
+            coffee_dict: Dict = {
+                coffee_name: {
+                    'description': coffee_description,
+                    'origin': origin,
+                    'altitude': coffee_altitude,
+                    'price': coffee_price,
+                    'process': process,
+                    'tasting_notes': tasting_notes,
+                    'url': url
+                }
+            }
+
+            # self._coffee_writer(coffee_dict)
+            coffees_dict.update(coffee_dict)
             coffees.append(current_coffee)
 
+        self._coffee_writer(coffees_dict)
+
         return coffees
+
+    @staticmethod
+    def _coffee_writer(coffee_dict: Dict) -> None:
+
+        """Helper function to write current coffees to a JSON file.
+
+        Parameters
+        ----------
+        coffee_dict: Dict
+            Dictionary of all currently available coffees.
+
+        Returns
+        -------
+        None
+        """
+        with open('tmp_current_coffee_data.json', 'w') as write_file:
+            json.dump(coffee_dict, write_file, indent=4)
 
     @staticmethod
     def _find_coffee_urls(shop_homepage: requests.Response) -> List[str]:
@@ -114,6 +154,19 @@ class SquareMileScraper(BaseScraper):
         return coffee_links
 
     def _get_price_dict(self, price_str: str) -> Dict[int, float]:
+
+        """Helper function to extract coffee price from a string.
+
+        Parameters
+        ----------
+        price_str: str
+            Price of coffee as a string, extracted from BeautifulSoup object.
+
+        Returns
+        -------
+        {weight: price}
+            Key-value pair, indicating price per package, and weight of package.
+        """
         price_str_list = price_str.split(' - ')
 
         if len(price_str_list) == 1:
