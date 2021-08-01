@@ -1,3 +1,6 @@
+import json
+from datetime import date
+from operator import attrgetter
 from typing import List, Dict
 
 import requests
@@ -5,8 +8,6 @@ from bs4 import BeautifulSoup
 
 from filterbyfilter.scrapers.base_scraper import BaseScraper
 from ..coffee import Coffee
-
-import json
 
 
 class SquareMileScraper(BaseScraper):
@@ -56,11 +57,9 @@ class SquareMileScraper(BaseScraper):
             product_soup = coffee_soup.find_all('form', attrs={'action': '/cart/add'})
             if option_soup := product_soup[0].find_all('div', attrs={'id': 'product-variants'}):
                 for price in option_soup[0].find_all('option'):
-                    # return price dict
                     coffee_price.update(self._get_price_dict(price.text))
             else:
                 price_soup = product_soup[0].find_all('span', attrs={'itemprop': 'price'})
-                # return price dict
                 coffee_price.update(self._get_price_dict(price_soup[0].text))
 
             # Extract tasting notes
@@ -84,6 +83,9 @@ class SquareMileScraper(BaseScraper):
                 url=url
             )
 
+            with open('tmp_current_coffee_data.json', 'r') as file:
+                json_coffee_data = json.load(file)
+
             coffee_dict: Dict = {
                 coffee_name: {
                     'description': coffee_description,
@@ -92,9 +94,11 @@ class SquareMileScraper(BaseScraper):
                     'price': coffee_price,
                     'process': process,
                     'tasting_notes': tasting_notes,
-                    'url': url
+                    'url': url,
                 }
             }
+
+            coffee_dict[coffee_name].update({'date_added': self._date_added(coffee_dict, json_coffee_data)})
 
             # self._coffee_writer(coffee_dict)
             coffees_dict.update(coffee_dict)
@@ -183,3 +187,36 @@ class SquareMileScraper(BaseScraper):
         price = float(price_str_list[1].strip('£'))
 
         return {weight: price}
+
+    @staticmethod
+    def _date_added(current_coffee: Dict, last_coffees: Dict) -> tuple:
+
+        """Helper function for checking the date a given coffee was added.l
+
+        Parameters
+        ----------
+        current_coffee: Dict
+            The coffee to be checked for when it was added to Square Mile.
+
+        last_coffees: Dict
+            The JSON document with the results from the previous execution of sqmile_scraper.
+            Contains all the coffees available at the last check date.
+
+        Returns
+        -------
+        date_added_tuple: tuple
+            Tuple storing the year, month, and day the coffee was added to Square Mile.
+
+        """
+        date_added_tuple = (0, 0, 0)
+        attrs = ('tm_year', 'tm_mon', 'tm_mday')
+        for key in current_coffee.keys():
+            if key in last_coffees.keys():
+                if 'date_added' in current_coffee[key].keys():
+                    date_added_tuple = current_coffee[key]['date_added']
+                else:
+                    date_added_tuple = tuple(attrgetter(*attrs)(date.timetuple(date.today())))
+            else:
+                date_added_tuple = tuple(attrgetter(*attrs)(date.timetuple(date.today())))
+
+        return date_added_tuple
