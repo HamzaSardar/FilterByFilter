@@ -15,7 +15,8 @@ class Coffee:
                  price: Dict[int, float],
                  process: List[str],
                  tasting_notes: List[str],
-                 url: str) -> None:
+                 url: str,
+                 is_available: bool) -> None:
 
         """Coffee -- contains all relevant product information for a listed coffee.
 
@@ -48,6 +49,7 @@ class Coffee:
         self.tasting_notes = tasting_notes
         self.url = url
         self.special = len(list(filter(lambda x: x < 0, price.keys()))) > 0
+        self.is_available = is_available
 
         self.date_added: Optional[datetime] = None
 
@@ -79,7 +81,7 @@ class Coffee:
             self.date_added = tuple(attrgetter(*attrs)(date.timetuple(date.today())))
             json_coffee_data.update({self.name: self._coffee_to_dict()})
 
-        with open(json_file, 'w+') as f_write:
+        with open(json_file, 'w') as f_write:
             json.dump(json_coffee_data, f_write, indent=4)
 
     def _coffee_to_dict(self) -> Dict[str, Any]:
@@ -101,7 +103,8 @@ class Coffee:
             'tasting_notes': self.tasting_notes,
             'url': self.url,
             'special': self.special,
-            'date_added': self.date_added
+            'date_added': self.date_added,
+            'is_available': self.is_available
         }
 
         return coffee_dict

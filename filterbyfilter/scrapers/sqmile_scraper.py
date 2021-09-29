@@ -1,5 +1,7 @@
-from typing import List, Dict
+from typing import List, Dict, Union
+from pathlib import Path
 
+import json
 import requests
 from bs4 import BeautifulSoup
 
@@ -87,7 +89,8 @@ class SquareMileScraper(BaseScraper):
                 price=coffee_price,
                 process=process,
                 tasting_notes=tasting_notes,
-                url=url
+                url=url,
+                is_available=True
             )
 
             self.coffees.append(current_coffee)
@@ -155,3 +158,24 @@ class SquareMileScraper(BaseScraper):
         price = float(price_str_list[1].strip('£'))
 
         return {weight: price}
+
+    def amend_json(self, json_file: Union[str, Path], coffees: List[Coffee]) -> None:
+
+        coffee_names = []
+        for coffee_elem in coffees:
+            coffee_names.append(coffee_elem.name)
+
+        try:
+            with open(json_file, 'r') as f_read:
+                json_coffee_data = json.load(f_read)
+        except FileNotFoundError:
+            json_coffee_data = {}
+
+        for coffee in json_coffee_data.keys():
+            if coffee not in coffee_names:
+                json_coffee_data[coffee].update({'is_available': False})
+            else:
+                json_coffee_data[coffee].update({'is_available': True})
+
+        with open(json_file, 'w') as f_write:
+            json.dump(json_coffee_data, f_write, indent=4)
