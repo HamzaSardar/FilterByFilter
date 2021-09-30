@@ -161,6 +161,19 @@ class SquareMileScraper(BaseScraper):
 
     def amend_json(self, json_file: Union[str, Path], coffees: List[Coffee]) -> None:
 
+        """Function to check coffee availability. Runs after scrape().
+        Checks scraped coffees against the JSON document of all coffees.
+        Any coffee in the JSON document but not in the list
+        of scraped coffees is no longer available.
+
+        Parameters
+        ----------
+        json_file: object
+            The JSON document containing all coffees.
+        coffees: List[Coffee]
+            List of all coffees obtained by the scrape() method.
+        """
+
         coffee_names = []
         for coffee_elem in coffees:
             coffee_names.append(coffee_elem.name)
